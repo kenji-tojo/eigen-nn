@@ -63,11 +63,10 @@ public:
 
     void reverse(Eigen::MatrixXf out, Eigen::MatrixXf &in) override {
         assert(memory.size() > 0);
-        const Eigen::VectorXf out_red = out.rowwise().sum();
-        if constexpr(bias_)
-            bias += out_red;
-        mat += out_red * memory.rowwise().sum().transpose();
         in = mat.transpose() * out;
+        mat += out * memory.transpose();
+        if constexpr(bias_)
+            bias += out.rowwise().sum();
     }
 };
 
