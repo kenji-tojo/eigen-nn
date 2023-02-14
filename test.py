@@ -12,6 +12,8 @@ if __name__ == '__main__':
     if args.file:
         print(f'input file: {args.file}')
     
-    import eignn as m
+
+    import eignn
+
     mat = np.zeros((10,20), dtype=np.float32)
-    m.inspect_tensor(mat)
+    eignn.inspect_tensor(mat)
