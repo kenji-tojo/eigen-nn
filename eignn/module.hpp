@@ -29,9 +29,9 @@ public:
     void reverse(Eigen::MatrixXf out, Eigen::MatrixXf &in) override {
         assert(memory.size() > 0);
         in.resize(memory.rows(),memory.cols());
-        for (int ii = 0; ii < in.rows(); ++ii) {
-            for (int jj = 0; jj < in.cols(); ++jj) {
-                in(ii,jj) = float(memory(ii,jj)>0)*out(ii,jj);
+        for (int ii = 0; ii < in.cols(); ++ii) {
+            for (int jj = 0; jj < in.rows(); ++jj) {
+                in(jj,ii) = float(memory(jj,ii)>0)*out(jj,ii);
             }
         }
     }
