@@ -66,7 +66,7 @@ public:
         const Eigen::VectorXf out_red = out.rowwise().sum();
         if constexpr(bias_)
             bias += out_red;
-        mat += out_red * memory.transpose();
+        mat += out_red * memory.rowwise().sum().transpose();
         in = mat.transpose() * out;
     }
 };
