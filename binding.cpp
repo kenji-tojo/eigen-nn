@@ -3,7 +3,7 @@
 #include <nanobind/nanobind.h>
 #include <nanobind/tensor.h>
 
-#include "eigen-nn/module.hpp"
+#include "eignn/module.hpp"
 
 
 namespace nb = nanobind;

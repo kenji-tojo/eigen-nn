@@ -1,8 +1,8 @@
 #include <iostream>
 
-#include "eigen-nn/module.hpp"
-#include "eigen-nn/sampler.hpp"
-#include "eigen-nn/loss.hpp"
+#include "eignn/module.hpp"
+#include "eignn/sampler.hpp"
+#include "eignn/loss.hpp"
 
 
 namespace {
