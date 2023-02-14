@@ -39,7 +39,7 @@ int main() {
     x.resize(coords, batch_size);
 
     const float step_size = 1e-1f;
-    const int epochs = 50;
+    const int epochs = 30;
     eignn::MSELoss loss;
     eignn::Sampler<float> sampler;
 

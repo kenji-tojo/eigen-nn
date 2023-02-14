@@ -2,4 +2,6 @@
 /.idea*
 /cmake-build*
 
+/output
+
 *.so
