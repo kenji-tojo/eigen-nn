@@ -22,7 +22,7 @@ if __name__ == '__main__':
     hidden_depth = 1
     step_size = 1e0
     batch_size = 128
-    epochs = 30
+    epochs = 20
     img = eignn.fit_nn(img, hidden_dim, hidden_depth, step_size, batch_size, epochs)
     img = Image.fromarray((img*255.).clip(0,255).astype(np.uint8))
     img.save(os.path.join(OUTPUT_DIR,'result.png'))

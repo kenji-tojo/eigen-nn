@@ -74,14 +74,11 @@ NB_MODULE(eignn, m) {
         ::enumerate_coords_2d(img, coords, rgb, idx);
 
 
-        std::vector<int> freq{1, 2, 4, 8};
+        std::vector<int> freq{1, 2, 4, 8, 16};
         const int in_dim = 2*(1+2*freq.size());
         const int out_dim = 3;
 
         eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
-//        eignn::module::Sequential mlp;
-//        mlp.modules.push_back(std::make_unique<eignn::module::Linear<true>>(in_dim,out_dim));
-//        mlp.modules.push_back(std::make_unique<eignn::module::Sigmoid>());
 
 #if defined(NDEBUG)
         const int batches = pixels/batch_size;
