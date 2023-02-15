@@ -12,12 +12,17 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     with Image.open(args.path) as img:
-        img = np.asarray(img).astype(np.float32)/255.
+        img = (np.asarray(img).astype(np.float32)+.5)/256.
 
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     import eignn
-    img = eignn.fit_nn(img)
+    hidden_dim = 32
+    hidden_depth = 1
+    step_size = 1e0
+    batch_size = 128
+    epochs = 30
+    img = eignn.fit_nn(img, hidden_dim, hidden_depth, step_size, batch_size, epochs)
     img = Image.fromarray((img*255.).clip(0,255).astype(np.uint8))
-    img.save(os.path.join(OUTPUT_DIR, 'result.png'))
+    img.save(os.path.join(OUTPUT_DIR,'result.png'))

@@ -29,16 +29,16 @@ int main() {
     const int in_dim = coords*(1+2*freq.size());
     const int out_dim = coords;
     const int hidden_dim = 32;
-    const int hidden_depth = 3;
+    const int hidden_depth = 1;
 
     eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
 
-    const int batch_size = 128;
+    const int batch_size = 32;
     MatrixXf x, x_enc, y;
     MatrixXf d_x, d_loss;
     x.resize(coords, batch_size);
 
-    const float step_size = 1e-1f;
+    const float step_size = 1.f;
     const int epochs = 30;
     eignn::MSELoss loss;
     eignn::Sampler<float> sampler;
