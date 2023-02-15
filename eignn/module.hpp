@@ -138,18 +138,16 @@ public:
 class MLP: public Sequential {
 public:
     MLP(int in_dim, int out_dim, int hidden_dim, int hidden_depth) {
-        add_dense(in_dim, hidden_dim, hidden_dim, /*relu=*/true);
+        add_dense(in_dim, hidden_dim, /*relu=*/true);
         for (int dd = 0; dd < hidden_depth; ++dd)
-            add_dense(hidden_dim, hidden_dim, hidden_dim, /*relu=*/true);
-        add_dense(hidden_dim, out_dim, hidden_dim, /*relu=*/false);
+            add_dense(hidden_dim, hidden_dim, /*relu=*/true);
+        add_dense(hidden_dim, out_dim, /*relu=*/false);
         modules.push_back(std::make_unique<Sigmoid>());
     }
 
 private:
-    void add_dense(int in_dim, int out_dim, int hidden_dim, bool relu) {
+    void add_dense(int in_dim, int out_dim, bool relu) {
         modules.push_back(std::make_unique<Linear<true>>(in_dim, out_dim));
-//        modules.push_back(std::make_unique<Linear<false>>(in_dim, hidden_dim));
-//        modules.push_back(std::make_unique<Linear<true>>(hidden_dim, out_dim));
         if (relu)
             modules.push_back(std::make_unique<ReLU>());
     }
