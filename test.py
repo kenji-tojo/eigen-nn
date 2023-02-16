@@ -30,9 +30,12 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     epochs = args.epochs
     freqs = args.freqs
+    grid_res = 128
+    feature_dim = 4
     img = eignn.fit_nn(
         img, hidden_dim, hidden_depth,
         step_size, batch_size, epochs,
+        grid_res, feature_dim,
         np.array([2**f for f in range(freqs)], dtype=np.float32)
     )
     img = Image.fromarray((img*255.).clip(0,255).astype(np.uint8))

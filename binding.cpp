@@ -38,7 +38,6 @@ void enumerate_coords_2d(
     }
 }
 
-
 } // namespace
 
 
@@ -51,6 +50,8 @@ NB_MODULE(eignn, m) {
             const float step_size,
             const int batch_size,
             const int epochs,
+            const int grid_res,
+            const int feature_dim,
             nb::tensor<float, nb::shape<nb::any>> &_freq
     ) {
         using namespace Eigen;
@@ -76,15 +77,18 @@ NB_MODULE(eignn, m) {
 
 
         eignn::module::FourierFeature ff;
-        const auto L = _freq.shape(0);
-        ff.freq.resize(L);
-        for (int ii = 0; ii < L; ++ii)
+        const int freqs = _freq.shape(0);
+        ff.freq.resize(freqs);
+        for (int ii = 0; ii < freqs; ++ii)
             ff.freq[ii] = _freq(ii);
 
+        ArrayXi grid_shape;
+        grid_shape.resize(2);
+        grid_shape[0] = grid_shape[1] = grid_res;
+        eignn::module::FeatureGrid<2> grid{grid_shape, feature_dim};
 
-        const int in_dim = 2*(1+2*L);
+        const int in_dim = (grid.dim()+2)*(1+2*freqs);
         const int out_dim = 3;
-
         eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
 
 #if defined(NDEBUG)
@@ -104,15 +108,20 @@ NB_MODULE(eignn, m) {
             for (int batch_id = 0; batch_id < batches; ++batch_id) {
                 x = coords.block(0,batch_size*batch_id,2,batch_size);
                 y_tar = rgb.block(0,batch_size*batch_id,3,batch_size);
-                ff.forward(x);
+
+                grid.forward(x);
+                ff.forward(grid.y());
                 mlp.forward(ff.y());
                 assert(!std::isnan(mlp.y().sum()));
+
                 float loss_val;
                 loss.eval(mlp.y(),y_tar,loss_val,loss_bar);
                 assert(!std::isnan(loss_val));
+
                 mlp.reverse(step_size*loss_bar);
                 ff.reverse(mlp.x_bar());
-                assert(ff.x_bar().rows() == x.rows() && ff.x_bar().cols() == x.cols());
+                grid.reverse(ff.x_bar());
+                assert(grid.x_bar().rows() == x.rows() && grid.x_bar().cols() == x.cols());
 
 #if defined(NDEBUG)
                 if (batch_id == 0 || batch_id % (batches/10) != 0)
@@ -134,14 +143,14 @@ NB_MODULE(eignn, m) {
         auto img_out = new float[pixels*channels];
         for (int iw = 0; iw < width; ++iw) {
             x = coords.block(0,height*iw,2,height);
-            ff.forward(x);
+
+            grid.forward(x);
+            ff.forward(grid.y());
             mlp.forward(ff.y());
 
-            for (int ih = 0; ih < height; ++ih) {
-                for (int ic = 0; ic < channels; ++ic) {
+            for (int ih = 0; ih < height; ++ih)
+                for (int ic = 0; ic < channels; ++ic)
                     img_out[channels*height*iw+channels*ih+ic] = mlp.y()(ic,ih);
-                }
-            }
         }
 
         size_t shape[3]{width,height,channels};
