@@ -15,9 +15,15 @@ namespace eignn::module {
 class Module {
 public:
     bool freeze = false;
-    virtual void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) = 0;
-    virtual void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) = 0;
+    virtual void forward(const Eigen::MatrixXf &x) = 0;
+    virtual void reverse(const Eigen::MatrixXf &y_bar) = 0;
+    const Eigen::MatrixXf &y() const { return m_y; }
+    const Eigen::MatrixXf &x_bar() const { return m_x_bar; };
     virtual ~Module() = default;
+
+protected:
+    Eigen::MatrixXf m_y;
+    Eigen::MatrixXf m_x_bar;
 };
 
 
@@ -27,16 +33,16 @@ public:
 
     ~ReLU() override = default;
 
-    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
-        y = x.cwiseMax(0);
+    void forward(const Eigen::MatrixXf &x) override {
+        m_y = x.cwiseMax(0);
         partial_x.resize(x.rows(), x.cols());
         for (int col = 0; col < x.cols(); ++col)
             for (int row = 0; row < x.rows(); ++row)
                 partial_x(row,col) = float(x(row,col)>0);
     }
 
-    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
-        x_bar = y_bar.cwiseProduct(partial_x);
+    void reverse(const Eigen::MatrixXf &y_bar) override {
+        m_x_bar = y_bar.cwiseProduct(partial_x);
     }
 };
 
@@ -47,14 +53,14 @@ public:
 
     ~Sigmoid() override = default;
 
-    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
-        y = x;
-        y = ((-1.f*y).array().exp()+1.f).inverse().matrix();
-        partial_x = (y.array() * ((-1.f*y).array()+1.f)).matrix();
+    void forward(const Eigen::MatrixXf &x) override {
+        m_y = x;
+        m_y = ((-1.f*m_y).array().exp()+1.f).inverse().matrix();
+        partial_x = (m_y.array() * ((-1.f*m_y).array()+1.f)).matrix();
     }
 
-    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
-        x_bar = y_bar.cwiseProduct(partial_x);
+    void reverse(const Eigen::MatrixXf &y_bar) override {
+        m_x_bar = y_bar.cwiseProduct(partial_x);
     }
 };
 
@@ -81,16 +87,16 @@ public:
 
     ~Linear() override = default;
 
-    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
-        y = mat * x;
+    void forward(const Eigen::MatrixXf &x) override {
+        m_y = mat * x;
         if constexpr(bias_)
-            y.colwise() += bias;
+            m_y.colwise() += bias;
 
         partial_mat = x.transpose();
     }
 
-    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
-        x_bar = mat.transpose() * y_bar;
+    void reverse(const Eigen::MatrixXf &y_bar) override {
+        m_x_bar = mat.transpose() * y_bar;
 
         if (freeze)
             return;
@@ -108,23 +114,34 @@ public:
 
     ~Sequential() override = default;
 
-    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
+    size_t size() const { return modules.size(); }
+
+    void forward(const Eigen::MatrixXf &x) override {
         assert(!modules.empty());
-        for (auto &m: modules) {
-            assert(m);
-            m->forward(x,x);
+        assert(modules[0]);
+        modules[0]->forward(x);
+        for (int ii = 0; ii < size()-1; ++ii) {
+            auto &m0 = modules[ii];
+            auto &m1 = modules[ii+1];
+            assert(m0);
+            assert(m1);
+            m1->forward(m0->y());
         }
-        y = x;
+        m_y = modules[size()-1]->y();
     }
 
-    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
+    void reverse(const Eigen::MatrixXf &y_bar) override {
         assert(!modules.empty());
-        for (int ii = 0; ii < modules.size(); ++ii) {
-            auto &m = modules[modules.size()-ii-1];
-            assert(m);
-            m->reverse(y_bar,y_bar);
+        assert(modules[size()-1]);
+        modules[size()-1]->reverse(y_bar);
+        for (int ii = 0; ii < size()-1; ++ii) {
+            auto &m0 = modules[modules.size()-ii-2];
+            auto &m1 = modules[modules.size()-ii-1];
+            assert(m0);
+            assert(m1);
+            m0->reverse(m1->x_bar());
         }
-        x_bar = y_bar;
+        m_x_bar = modules[0]->x_bar();
     }
 };
 

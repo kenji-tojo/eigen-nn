@@ -93,7 +93,7 @@ NB_MODULE(eignn, m) {
         const int batches = 10;
 #endif
 
-        MatrixXf x, x_enc, y, y_tar;
+        MatrixXf x, x_enc, y_tar;
         MatrixXf d_x, d_loss;
         x.resize(2, batch_size);
 
@@ -106,13 +106,13 @@ NB_MODULE(eignn, m) {
                 x = coords.block(0,batch_size*batch_id,2,batch_size);
                 y_tar = rgb.block(0,batch_size*batch_id,3,batch_size);
                 eignn::encoder::fourier_feature(x,x_enc,freq);
-                mlp.forward(x_enc,y);
-                assert(!std::isnan(y.sum()));
+                mlp.forward(x_enc);
+                assert(!std::isnan(mlp.y().sum()));
                 float loss_val;
-                loss.eval(y,y_tar,loss_val,d_loss);
+                loss.eval(mlp.y(),y_tar,loss_val,d_loss);
                 assert(!std::isnan(loss_val));
-                mlp.reverse(step_size*d_loss, d_x);
-                assert(d_x.rows() == in_dim && d_x.cols() == batch_size);
+                mlp.reverse(step_size*d_loss);
+                assert(mlp.x_bar().rows() == in_dim && mlp.x_bar().cols() == batch_size);
 
 #if defined(NDEBUG)
                 if (batch_id == 0 || batch_id % (batches/10) != 0)
@@ -135,11 +135,11 @@ NB_MODULE(eignn, m) {
         for (int iw = 0; iw < width; ++iw) {
             x = coords.block(0,height*iw,2,height);
             eignn::encoder::fourier_feature(x,x_enc,freq);
-            mlp.forward(x_enc,y);
+            mlp.forward(x_enc);
 
             for (int ih = 0; ih < height; ++ih) {
                 for (int ic = 0; ic < channels; ++ic) {
-                    img_out[channels*height*iw+channels*ih+ic] = y(ic,ih);
+                    img_out[channels*height*iw+channels*ih+ic] = mlp.y()(ic,ih);
                 }
             }
         }

@@ -34,8 +34,8 @@ int main() {
     eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
 
     const int batch_size = 32;
-    MatrixXf x, x_enc, y;
-    MatrixXf d_x, d_loss;
+    MatrixXf x, x_enc;
+    MatrixXf d_loss;
     x.resize(coords, batch_size);
 
     const float step_size = 1.f;
@@ -46,11 +46,11 @@ int main() {
     for (int ii = 0; ii < epochs; ++ii) {
         random_matrix(x, sampler);
         eignn::encoder::fourier_feature(x, x_enc, freq);
-        mlp.forward(x_enc, y);
+        mlp.forward(x_enc);
         float loss_val;
-        loss.eval(y, x, loss_val, d_loss);
-        mlp.reverse(-1.f*step_size*d_loss, d_x);
-        assert(d_x.rows() == in_dim && d_x.cols() == batch_size);
+        loss.eval(mlp.y(), x, loss_val, d_loss);
+        mlp.reverse(step_size*d_loss);
+        assert(mlp.x_bar().rows() == in_dim && mlp.x_bar().cols() == batch_size);
         cout << "epoch no." << ii << ": loss = " << loss_val << endl;
     }
 }
