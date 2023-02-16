@@ -72,17 +72,15 @@ public:
     Eigen::VectorXf bias;
 
     Linear(int in_dim, int out_dim) {
-        Sampler<float> sampler;
+        GaussSampler<float> gs{/*mean=*/0.f,/*stddev=*/.5f};
         mat.setZero(out_dim,in_dim);
         if constexpr(bias_)
             bias.setZero(out_dim);
 
         for (int ii = 0; ii < mat.rows(); ++ii) {
             for (int jj = 0; jj < mat.cols(); ++jj) {
-                mat(ii,jj) = 2.f*(sampler.sample()-.5f);
+                mat(ii,jj) = gs.sample();
             }
-            if constexpr(bias_)
-                bias[ii] = 2.f*(sampler.sample()-.5f);
         }
     }
 

@@ -50,7 +50,8 @@ NB_MODULE(eignn, m) {
             const int hidden_depth,
             const float step_size,
             const int batch_size,
-            const int epochs
+            const int epochs,
+            nb::tensor<float, nb::shape<nb::any>> &_freq
     ) {
         using namespace Eigen;
 
@@ -74,8 +75,14 @@ NB_MODULE(eignn, m) {
         ::enumerate_coords_2d(img, coords, rgb, idx);
 
 
-        std::vector<int> freq{1, 2, 4, 8, 16};
-        const int in_dim = 2*(1+2*freq.size());
+        const auto L = _freq.shape(0);
+        std::vector<float> freq;
+        freq.resize(L);
+        for (int ii = 0; ii < L; ++ii)
+            freq[ii] = _freq(ii);
+
+
+        const int in_dim = 2*(1+2*L);
         const int out_dim = 3;
 
         eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
