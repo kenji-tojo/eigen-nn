@@ -50,7 +50,8 @@ int main() {
         float loss_val;
         loss.eval(mlp.y(), x, loss_val, loss_bar);
         mlp.reverse(step_size*loss_bar);
-        assert(mlp.x_bar().rows() == in_dim && mlp.x_bar().cols() == batch_size);
+        ff.reverse(mlp.x_bar());
+        assert(ff.x_bar().rows() == x.rows() && ff.x_bar().cols() == x.cols());
         cout << "epoch no." << ii << ": loss = " << loss_val << endl;
     }
 }

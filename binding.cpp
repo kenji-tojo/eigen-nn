@@ -111,7 +111,8 @@ NB_MODULE(eignn, m) {
                 loss.eval(mlp.y(),y_tar,loss_val,loss_bar);
                 assert(!std::isnan(loss_val));
                 mlp.reverse(step_size*loss_bar);
-                assert(mlp.x_bar().rows() == in_dim && mlp.x_bar().cols() == batch_size);
+                ff.reverse(mlp.x_bar());
+                assert(ff.x_bar().rows() == x.rows() && ff.x_bar().cols() == x.cols());
 
 #if defined(NDEBUG)
                 if (batch_id == 0 || batch_id % (batches/10) != 0)
