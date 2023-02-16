@@ -15,52 +15,46 @@ namespace eignn::module {
 class Module {
 public:
     bool freeze = false;
-    virtual void forward(Eigen::MatrixXf in, Eigen::MatrixXf &out) = 0;
-    virtual void reverse(Eigen::MatrixXf out, Eigen::MatrixXf &in) = 0;
+    virtual void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) = 0;
+    virtual void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) = 0;
     virtual ~Module() = default;
-    Eigen::MatrixXf memory;
 };
 
 
 class ReLU: public Module {
 public:
+    Eigen::MatrixXf partial_x;
+
     ~ReLU() override = default;
 
-    void forward(Eigen::MatrixXf in, Eigen::MatrixXf &out) override {
-        out = in.cwiseMax(0);
-        memory = std::move(in); // for reverse-mode evaluation
+    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
+        y = x.cwiseMax(0);
+        partial_x.resize(x.rows(), x.cols());
+        for (int col = 0; col < x.cols(); ++col)
+            for (int row = 0; row < x.rows(); ++row)
+                partial_x(row,col) = float(x(row,col)>0);
     }
 
-    void reverse(Eigen::MatrixXf out, Eigen::MatrixXf &in) override {
-        assert(memory.size() > 0);
-        in.resize(memory.rows(),memory.cols());
-        for (int ii = 0; ii < in.cols(); ++ii) {
-            for (int jj = 0; jj < in.rows(); ++jj) {
-                in(jj,ii) = float(memory(jj,ii)>0)*out(jj,ii);
-            }
-        }
+    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
+        x_bar = y_bar.cwiseProduct(partial_x);
     }
 };
 
 
 class Sigmoid: public Module {
 public:
+    Eigen::MatrixXf partial_x;
+
     ~Sigmoid() override = default;
 
-    void forward(Eigen::MatrixXf in, Eigen::MatrixXf &out) override {
-        const auto ones = Eigen::MatrixXf::Ones(in.rows(), in.cols());
-
-        out = in;
-        for (int ii = 0; ii < out.cols(); ++ii) {
-            for (int jj = 0; jj < out.rows(); ++jj) {
-                out(jj,ii) = 1.f/(1.f+std::exp(-out(jj,ii)));
-            }
-        }
-        memory = out.cwiseProduct(ones-out);
+    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
+        y = x;
+        y = ((-1.f*y).array().exp()+1.f).inverse().matrix();
+        partial_x = (y.array() * ((-1.f*y).array()+1.f)).matrix();
     }
 
-    void reverse(Eigen::MatrixXf out, Eigen::MatrixXf &in) override {
-        in = memory.cwiseProduct(out);
+    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
+        x_bar = y_bar.cwiseProduct(partial_x);
     }
 };
 
@@ -71,37 +65,39 @@ public:
     Eigen::MatrixXf mat;
     Eigen::VectorXf bias;
 
+    Eigen::MatrixXf partial_mat;
+
     Linear(int in_dim, int out_dim) {
         GaussSampler<float> gs{/*mean=*/0.f,/*stddev=*/.5f};
+
         mat.setZero(out_dim,in_dim);
         if constexpr(bias_)
             bias.setZero(out_dim);
 
-        for (int ii = 0; ii < mat.rows(); ++ii) {
-            for (int jj = 0; jj < mat.cols(); ++jj) {
-                mat(ii,jj) = gs.sample();
-            }
-        }
+        for (int col = 0; col < mat.cols(); ++col)
+            for (int row = 0; row < mat.rows(); ++row)
+                mat(row,col) = gs.sample();
     }
 
     ~Linear() override = default;
 
-    void forward(Eigen::MatrixXf in, Eigen::MatrixXf &out) override {
-        out = mat * in;
-        if constexpr(bias_) {
-            out.colwise() += bias;
-        }
-        memory = std::move(in);
+    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
+        y = mat * x;
+        if constexpr(bias_)
+            y.colwise() += bias;
+
+        partial_mat = x.transpose();
     }
 
-    void reverse(Eigen::MatrixXf out, Eigen::MatrixXf &in) override {
-        assert(memory.size() > 0);
-        in = mat.transpose() * out;
+    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
+        x_bar = mat.transpose() * y_bar;
+
         if (freeze)
             return;
-        mat += out * memory.transpose();
+
+        mat -= y_bar * partial_mat;
         if constexpr(bias_)
-            bias += out.rowwise().sum();
+            bias -= y_bar.rowwise().sum();
     }
 };
 
@@ -112,23 +108,23 @@ public:
 
     ~Sequential() override = default;
 
-    void forward(Eigen::MatrixXf in, Eigen::MatrixXf &out) override {
+    void forward(Eigen::MatrixXf x, Eigen::MatrixXf &y) override {
         assert(!modules.empty());
         for (auto &m: modules) {
             assert(m);
-            m->forward(in,in);
+            m->forward(x,x);
         }
-        out = in;
+        y = x;
     }
 
-    void reverse(Eigen::MatrixXf out, Eigen::MatrixXf &in) override {
+    void reverse(Eigen::MatrixXf y_bar, Eigen::MatrixXf &x_bar) override {
         assert(!modules.empty());
         for (int ii = 0; ii < modules.size(); ++ii) {
             auto &m = modules[modules.size()-ii-1];
             assert(m);
-            m->reverse(out,out);
+            m->reverse(y_bar,y_bar);
         }
-        in = out;
+        x_bar = y_bar;
     }
 };
 

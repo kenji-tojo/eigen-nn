@@ -111,8 +111,7 @@ NB_MODULE(eignn, m) {
                 float loss_val;
                 loss.eval(y,y_tar,loss_val,d_loss);
                 assert(!std::isnan(loss_val));
-                d_loss *= -1.f * step_size;
-                mlp.reverse(d_loss, d_x);
+                mlp.reverse(step_size*d_loss, d_x);
                 assert(d_x.rows() == in_dim && d_x.cols() == batch_size);
 
 #if defined(NDEBUG)
