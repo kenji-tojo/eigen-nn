@@ -7,36 +7,41 @@
 
 #include <vector>
 
-#include <Eigen/Dense>
+#include "module.hpp"
 
 
-namespace eignn::encoder {
-namespace {
+namespace eignn::module {
 
-template<typename Scalar_>
-void fourier_feature(
-        const Eigen::MatrixXf &x,
-        Eigen::MatrixXf &x_enc,
-        const std::vector<Scalar_> &freq
-) {
-    const auto dim = x.rows();
-    const auto L = freq.size();
+class FourierFeature: public Module {
+public:
+    std::vector<float> freq;
 
-    x_enc.resize(dim*(1+2*L), x.cols());
-    x_enc.block(0,0,dim,x.cols()) = x;
+    ~FourierFeature() override = default;
 
-    for (int ii = 0; ii < x.cols(); ++ii) {
-        for (int jj = 0; jj < dim; ++jj) {
-            for (int kk = 0; kk < L; ++kk) {
-                auto pi2 = 2.f*float(M_PI);
-                auto f = float(freq[kk]);
-                x_enc(dim+2*L*jj+2*kk+0, ii) = std::cos(pi2*f*x(jj,ii));
-                x_enc(dim+2*L*jj+2*kk+1, ii) = std::sin(pi2*f*x(jj,ii));
+    void forward(const Eigen::MatrixXf &x) override {
+        m_dim = x.rows();
+        const int freqs = freq.size();
+
+        m_y.resize(m_dim*(1+2*freqs), x.cols());
+        m_y.block(0,0,m_dim,x.cols()) = x;
+
+        for (int ii = 0; ii < x.cols(); ++ii) {
+            for (int jj = 0; jj < m_dim; ++jj) {
+                for (int kk = 0; kk < freqs; ++kk) {
+                    auto pi2 = 2.f*float(M_PI);
+                    m_y(m_dim+2*freqs*jj+2*kk+0, ii) = std::cos(pi2*freq[kk]*x(jj,ii));
+                    m_y(m_dim+2*freqs*jj+2*kk+1, ii) = std::sin(pi2*freq[kk]*x(jj,ii));
+                }
             }
         }
     }
 
-}
+    void reverse(const Eigen::MatrixXf &y_bar) override {
+        m_x_bar.resize(m_dim, y_bar.cols());
+    }
 
-} // namespace
-} // namespace eignn::encoder
+private:
+    int m_dim = 0;
+};
+
+} // namespace eignn::module

@@ -23,10 +23,11 @@ int main() {
     using namespace std;
     using namespace Eigen;
 
-    std::vector<int> freq{1, 2, 3, 4, 5, 6};
+    eignn::module::FourierFeature ff;
+    ff.freq = {1,2,3,4,5,6};
 
     const int coords = 2;
-    const int in_dim = coords*(1+2*freq.size());
+    const int in_dim = coords*(1+2*ff.freq.size());
     const int out_dim = coords;
     const int hidden_dim = 32;
     const int hidden_depth = 1;
@@ -34,8 +35,7 @@ int main() {
     eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
 
     const int batch_size = 32;
-    MatrixXf x, x_enc;
-    MatrixXf d_loss;
+    MatrixXf x, loss_bar;
     x.resize(coords, batch_size);
 
     const float step_size = 1.f;
@@ -45,11 +45,11 @@ int main() {
 
     for (int ii = 0; ii < epochs; ++ii) {
         random_matrix(x, sampler);
-        eignn::encoder::fourier_feature(x, x_enc, freq);
-        mlp.forward(x_enc);
+        ff.forward(x);
+        mlp.forward(ff.y());
         float loss_val;
-        loss.eval(mlp.y(), x, loss_val, d_loss);
-        mlp.reverse(step_size*d_loss);
+        loss.eval(mlp.y(), x, loss_val, loss_bar);
+        mlp.reverse(step_size*loss_bar);
         assert(mlp.x_bar().rows() == in_dim && mlp.x_bar().cols() == batch_size);
         cout << "epoch no." << ii << ": loss = " << loss_val << endl;
     }

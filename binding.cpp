@@ -75,11 +75,11 @@ NB_MODULE(eignn, m) {
         ::enumerate_coords_2d(img, coords, rgb, idx);
 
 
+        eignn::module::FourierFeature ff;
         const auto L = _freq.shape(0);
-        std::vector<float> freq;
-        freq.resize(L);
+        ff.freq.resize(L);
         for (int ii = 0; ii < L; ++ii)
-            freq[ii] = _freq(ii);
+            ff.freq[ii] = _freq(ii);
 
 
         const int in_dim = 2*(1+2*L);
@@ -93,8 +93,7 @@ NB_MODULE(eignn, m) {
         const int batches = 10;
 #endif
 
-        MatrixXf x, x_enc, y_tar;
-        MatrixXf d_x, d_loss;
+        MatrixXf x, y_tar, loss_bar;
         x.resize(2, batch_size);
 
         eignn::MSELoss loss;
@@ -105,13 +104,13 @@ NB_MODULE(eignn, m) {
             for (int batch_id = 0; batch_id < batches; ++batch_id) {
                 x = coords.block(0,batch_size*batch_id,2,batch_size);
                 y_tar = rgb.block(0,batch_size*batch_id,3,batch_size);
-                eignn::encoder::fourier_feature(x,x_enc,freq);
-                mlp.forward(x_enc);
+                ff.forward(x);
+                mlp.forward(ff.y());
                 assert(!std::isnan(mlp.y().sum()));
                 float loss_val;
-                loss.eval(mlp.y(),y_tar,loss_val,d_loss);
+                loss.eval(mlp.y(),y_tar,loss_val,loss_bar);
                 assert(!std::isnan(loss_val));
-                mlp.reverse(step_size*d_loss);
+                mlp.reverse(step_size*loss_bar);
                 assert(mlp.x_bar().rows() == in_dim && mlp.x_bar().cols() == batch_size);
 
 #if defined(NDEBUG)
@@ -134,8 +133,8 @@ NB_MODULE(eignn, m) {
         auto img_out = new float[pixels*channels];
         for (int iw = 0; iw < width; ++iw) {
             x = coords.block(0,height*iw,2,height);
-            eignn::encoder::fourier_feature(x,x_enc,freq);
-            mlp.forward(x_enc);
+            ff.forward(x);
+            mlp.forward(ff.y());
 
             for (int ih = 0; ih < height; ++ih) {
                 for (int ic = 0; ic < channels; ++ic) {
