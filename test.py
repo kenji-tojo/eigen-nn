@@ -15,6 +15,8 @@ if __name__ == '__main__':
     parser.add_argument('-w', '--width', type=int, default=32, help='hidden_width')
     parser.add_argument('-d', '--depth', type=int, default=3, help='hidden_depth')
     parser.add_argument('-b', '--batch_size', type=int, default=128, help='batch_size')
+    parser.add_argument('--grid_res', type=int, default=8, help='grid_res')
+    parser.add_argument('--feature_dim', type=int, default=2, help='feature_dim')
     args = parser.parse_args()
 
     with Image.open(args.path) as img:
@@ -30,8 +32,8 @@ if __name__ == '__main__':
     batch_size = args.batch_size
     epochs = args.epochs
     freqs = args.freqs
-    grid_res = 128
-    feature_dim = 4
+    grid_res = args.grid_res
+    feature_dim = args.feature_dim
     img = eignn.fit_nn(
         img, hidden_dim, hidden_depth,
         step_size, batch_size, epochs,
