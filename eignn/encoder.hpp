@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "module.hpp"
+#include "hash.hpp"
 
 
 namespace eignn::module {
@@ -72,20 +73,21 @@ private:
 template<int ndim_ = 2>
 class FeatureGrid: public Module {
 public:
-    Eigen::MatrixXf feature;
-    const int ndim = ndim_;
+    const int table_size;
+    const Eigen::ArrayXi shape;
 
-    explicit FeatureGrid(Eigen::ArrayXi shape, int dim)
-            : m_shape(std::move(shape)) {
+    Eigen::MatrixXf feature;
+
+    explicit FeatureGrid(Eigen::ArrayXi _shape, int dim, int _table_size)
+            : shape(std::move(_shape))
+            , table_size(_table_size) {
         static_assert(ndim_ == 2);
-        assert(m_shape.size() == ndim_);
-        feature.resize(dim, (m_shape+1).prod());
+        feature.resize(dim, table_size);
         GaussSampler<float> gs{0.f,.5f};
         for (int ii = 0; ii < feature.size(); ++ii)
             feature.data()[ii] = gs.sample();
     }
 
-    [[nodiscard]] const Eigen::ArrayXi &shape() const { return m_shape; }
     [[nodiscard]] int dim() const { return feature.rows(); }
 
     void forward(const Eigen::MatrixXf &x) override {
@@ -99,7 +101,6 @@ public:
     }
 
 private:
-    Eigen::ArrayXi m_shape;
 
     Eigen::ArrayXf x0, x1;
     Eigen::ArrayXf c0, c1;
@@ -113,10 +114,10 @@ private:
 
         x0 = x.row(0).array();
         x1 = x.row(1).array();
-        x0 *= float(shape()[0]);
-        x1 *= float(shape()[1]);
-        c0 = x0.floor().max(0).min(shape()[0]-1);
-        c1 = x1.floor().max(0).min(shape()[1]-1);
+        x0 *= float(shape[0]);
+        x1 *= float(shape[1]);
+        c0 = x0.floor().max(0).min(shape[0]-1);
+        c1 = x1.floor().max(0).min(shape[1]-1);
         x0 -= c0;
         x1 -= c1;
 
@@ -124,10 +125,10 @@ private:
             auto iw = int(c0[ii]);
             auto ih = int(c1[ii]);
 
-            const VectorXf u00 = feature.col(iw*shape()[1]+ih);
-            const VectorXf u01 = feature.col(iw*shape()[1]+ih+1);
-            const VectorXf u10 = feature.col((iw+1)*shape()[1]+ih);
-            const VectorXf u11 = feature.col((iw+1)*shape()[1]+ih+1);
+            const VectorXf u00 = feature.col(hash::enc_2d(iw,ih,table_size));
+            const VectorXf u01 = feature.col(hash::enc_2d(iw,ih+1,table_size));
+            const VectorXf u10 = feature.col(hash::enc_2d(iw+1,ih,table_size));
+            const VectorXf u11 = feature.col(hash::enc_2d(iw+1,ih+1,table_size));
 
             m_y.col(ii).block(0,0,dim(),1) = (1.f-x0[ii]) * (1.f-x1[ii]) * u00
                                              + (1.f-x0[ii]) * x1[ii] * u01
@@ -149,10 +150,10 @@ private:
 
             const VectorXf u = y_bar.col(ii).block(0,0,dim(),1);
 
-            feature.col(iw*shape()[1]+ih) -= (1.f-x0[ii]) * (1.f-x1[ii]) * u;
-            feature.col(iw*shape()[1]+ih+1) -= (1.f-x0[ii]) * x1[ii] * u;
-            feature.col((iw+1)*shape()[1]+ih) -= x0[ii] * (1.f-x1[ii]) * u;
-            feature.col((iw+1)*shape()[1]+ih+1) -= x0[ii] * x1[ii] * u;
+            feature.col(hash::enc_2d(iw,ih,table_size)) -= (1.f-x0[ii]) * (1.f-x1[ii]) * u;
+            feature.col(hash::enc_2d(iw,ih+1,table_size)) -= (1.f-x0[ii]) * x1[ii] * u;
+            feature.col(hash::enc_2d(iw+1,ih,table_size)) -= x0[ii] * (1.f-x1[ii]) * u;
+            feature.col(hash::enc_2d(iw+1,ih+1,table_size)) -= x0[ii] * x1[ii] * u;
         }
     }
 

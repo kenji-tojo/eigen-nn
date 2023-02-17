@@ -52,6 +52,7 @@ NB_MODULE(eignn, m) {
             const int epochs,
             const int grid_res,
             const int feature_dim,
+            const int table_size,
             nb::tensor<float, nb::shape<nb::any>> &_freq
     ) {
         using namespace Eigen;
@@ -85,7 +86,7 @@ NB_MODULE(eignn, m) {
         ArrayXi grid_shape;
         grid_shape.resize(2);
         grid_shape[0] = grid_shape[1] = grid_res;
-        eignn::module::FeatureGrid<2> grid{grid_shape, feature_dim};
+        eignn::module::FeatureGrid<2> grid{grid_shape, feature_dim, table_size};
 
         const int in_dim = (grid.dim()+2)*(1+2*freqs);
         const int out_dim = 3;
