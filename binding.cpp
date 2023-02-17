@@ -17,7 +17,7 @@ using namespace nb::literals;
 
 namespace {
 
-void enumerate_coords_2d(
+void create_pixel_dataset(
         nb::tensor<float, nb::shape<nb::any, nb::any, nb::any>> &img,
         Eigen::MatrixXf &coords,
         Eigen::MatrixXf &rgb,
@@ -52,7 +52,7 @@ NB_MODULE(eignn, m) {
             const int epochs,
             const int grid_res,
             const int feature_dim,
-            const int table_size,
+            const int table_size_log2,
             nb::tensor<float, nb::shape<nb::any>> &_freq
     ) {
         using namespace Eigen;
@@ -67,16 +67,6 @@ NB_MODULE(eignn, m) {
                   << std::endl;
 
 
-        std::vector<int> idx(pixels);
-        for (int ii = 0; ii < idx.size(); ++ii)
-            idx[ii] = ii;
-        std::random_device rd;
-        std::mt19937 g(rd());
-
-        MatrixXf coords, rgb;
-        ::enumerate_coords_2d(img, coords, rgb, idx);
-
-
         eignn::module::FourierFeature ff;
         const int freqs = _freq.shape(0);
         ff.freq.resize(freqs);
@@ -86,7 +76,7 @@ NB_MODULE(eignn, m) {
         ArrayXi grid_shape;
         grid_shape.resize(2);
         grid_shape[0] = grid_shape[1] = grid_res;
-        eignn::module::FeatureGrid<2> grid{grid_shape, feature_dim, table_size};
+        eignn::module::FeatureGrid<2> grid{grid_shape, feature_dim, table_size_log2};
 
         const int in_dim = (grid.dim()+2)*(1+2*freqs);
         const int out_dim = 3;
@@ -103,9 +93,16 @@ NB_MODULE(eignn, m) {
 
         eignn::MSELoss loss;
 
+        eignn::Shuffler shuffler;
+        MatrixXf coords, rgb;
+        std::vector<int> idx(pixels);
+        for (int ii = 0; ii < idx.size(); ++ii)
+            idx[ii] = ii;
+
         for (int epoch_id = 0; epoch_id < epochs; ++epoch_id) {
-            std::shuffle(idx.begin(), idx.end(), g);
-            ::enumerate_coords_2d(img, coords, rgb, idx);
+            shuffler.shuffle(idx);
+            ::create_pixel_dataset(img, coords, rgb, idx);
+
             for (int batch_id = 0; batch_id < batches; ++batch_id) {
                 x = coords.block(0,batch_size*batch_id,2,batch_size);
                 y_tar = rgb.block(0,batch_size*batch_id,3,batch_size);
@@ -138,7 +135,7 @@ NB_MODULE(eignn, m) {
 
         for (int ii = 0; ii < idx.size(); ++ii)
             idx[ii] = ii;
-        ::enumerate_coords_2d(img, coords, rgb, idx);
+        ::create_pixel_dataset(img, coords, rgb, idx);
 
 
         auto img_out = new float[pixels*channels];

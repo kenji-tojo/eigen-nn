@@ -17,7 +17,7 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--batch_size', type=int, default=128, help='batch_size')
     parser.add_argument('--grid_res', type=int, default=8, help='grid_res')
     parser.add_argument('--feature_dim', type=int, default=2, help='feature_dim')
-    parser.add_argument('--table_size', type=int, default=int(2**10), help='table_size')
+    parser.add_argument('--table_size_log2', type=int, default=10, help='table_size_log2')
     args = parser.parse_args()
 
     with Image.open(args.path) as img:
@@ -36,11 +36,11 @@ if __name__ == '__main__':
     freqs = args.freqs
     grid_res = args.grid_res
     feature_dim = args.feature_dim
-    table_size = args.table_size
+    table_size_log2 = args.table_size_log2
     img = eignn.fit_nn(
         img, hidden_dim, hidden_depth,
         step_size, batch_size, epochs,
-        grid_res, feature_dim, table_size,
+        grid_res, feature_dim, table_size_log2,
         np.array([2**f for f in range(freqs)], dtype=np.float32)
     )
     img = Image.fromarray((img*255.).clip(0,255).astype(np.uint8))

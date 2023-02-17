@@ -73,15 +73,18 @@ private:
 template<int ndim_ = 2>
 class FeatureGrid: public Module {
 public:
-    const int table_size;
-    const Eigen::ArrayXi shape;
-
     Eigen::MatrixXf feature;
 
-    explicit FeatureGrid(Eigen::ArrayXi _shape, int dim, int _table_size)
+    explicit FeatureGrid(Eigen::ArrayXi _shape, int dim, int table_size_log2)
             : shape(std::move(_shape))
-            , table_size(_table_size) {
+            , table_size(1<<table_size_log2) {
         static_assert(ndim_ == 2);
+        assert(shape.size() == ndim_);
+
+        int elems = (shape+1).prod();
+        while (table_size > elems*2)
+            table_size >>= 1;
+
         feature.resize(dim, table_size);
         GaussSampler<float> gs{0.f,.5f};
         for (int ii = 0; ii < feature.size(); ++ii)
@@ -101,6 +104,8 @@ public:
     }
 
 private:
+    uint32_t table_size;
+    Eigen::ArrayXi shape;
 
     Eigen::ArrayXf x0, x1;
     Eigen::ArrayXf c0, c1;
