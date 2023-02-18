@@ -20,6 +20,12 @@ public:
     void init(std::function<float(int)> &&init_fn) {
         for (int ii = 0; ii < m.size(); ++ii)
             m.data()[ii] = init_fn(ii);
+        grad.setZero();
+    }
+
+    void set_zero() {
+        m.setZero();
+        grad.setZero();
     }
 
     void descent() {

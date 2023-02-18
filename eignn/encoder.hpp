@@ -11,6 +11,7 @@
 
 #include "module.hpp"
 #include "hash.hpp"
+#include "ad.hpp"
 
 
 namespace eignn::module {
@@ -78,7 +79,7 @@ private:
 template<int ndim_ = 2>
 class FeatureGrid: public Module {
 public:
-    std::vector<Eigen::MatrixXf> feature;
+    std::vector<std::shared_ptr<ad::MatrixXf>> feature;
 
     explicit FeatureGrid(
             int min_res,
@@ -109,10 +110,10 @@ public:
                       << std::endl;
 
             auto &ft = feature[ii];
-            ft.resize(dim, table_size[ii]);
+            ft = std::make_shared<ad::MatrixXf>();
+            ft->resize(dim, table_size[ii]);
             GaussSampler<float> gs{0.f,.5f};
-            for (int jj = 0; jj < ft.size(); ++jj)
-                ft.data()[jj] = gs.sample();
+            ft->init([&gs](int index){ return gs.sample(); });
         }
     }
 
@@ -127,6 +128,10 @@ public:
     void adjoint(const Eigen::MatrixXf &y_bar) override {
         static_assert(ndim_ == 2);
         adjoint_2d(y_bar);
+    }
+
+    std::vector<std::shared_ptr<ad::MatrixXf>> parameters() override {
+        return feature;
     }
 
 private:
@@ -173,7 +178,7 @@ private:
             assert((x0 < 1.f+1e-5f).all());
 
             for (int ii = 0; ii < x.cols(); ++ii) {
-                const auto &ft = feature[level_id];
+                const auto &ft = feature[level_id]->m;
                 const auto T = table_size[level_id];
 
                 const auto iw = int(c0[ii]);
@@ -205,6 +210,9 @@ private:
                 y_adj.rows()-dim()*levels(),y_adj.cols()
         );
 
+        for (auto &ft: feature)
+            ft->grad.setZero();
+
         for (int level_id = 0; level_id < levels(); ++level_id) {
             const auto &x0 = x0_vec[level_id];
             const auto &x1 = x1_vec[level_id];
@@ -221,13 +229,13 @@ private:
 
                 const VectorXf u = y_adj.block(dim()*level_id,ii,dim(),1);
 
-                auto &ft = feature[level_id];
+                auto &ft_grad = feature[level_id]->grad;
                 const auto T = table_size[level_id];
 
-                ft.col(hash::enc_2d(iw,ih,T)) -= (1.f-x0[ii]) * (1.f-x1[ii]) * u;
-                ft.col(hash::enc_2d(iw,ih+1,T)) -= (1.f-x0[ii]) * x1[ii] * u;
-                ft.col(hash::enc_2d(iw+1,ih,T)) -= x0[ii] * (1.f-x1[ii]) * u;
-                ft.col(hash::enc_2d(iw+1,ih+1,T)) -= x0[ii] * x1[ii] * u;
+                ft_grad.col(hash::enc_2d(iw,ih,T)) += (1.f-x0[ii]) * (1.f-x1[ii]) * u;
+                ft_grad.col(hash::enc_2d(iw,ih+1,T)) += (1.f-x0[ii]) * x1[ii] * u;
+                ft_grad.col(hash::enc_2d(iw+1,ih,T)) += x0[ii] * (1.f-x1[ii]) * u;
+                ft_grad.col(hash::enc_2d(iw+1,ih+1,T)) += x0[ii] * x1[ii] * u;
             }
         }
     }

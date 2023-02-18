@@ -77,7 +77,7 @@ public:
         mat->resize(out_dim,in_dim);
         if constexpr(bias_) {
             bias->resize(out_dim,1);
-            bias->m.setZero();
+            bias->set_zero();
         }
 
         GaussSampler<float> gs{/*mean=*/0.f,/*stddev=*/.5f};

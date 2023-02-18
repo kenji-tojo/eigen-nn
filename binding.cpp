@@ -89,7 +89,9 @@ NB_MODULE(eignn, m) {
 
 
         eignn::MSELoss loss;
-        eignn::Optimizer optimizer(mlp.parameters());
+        eignn::SGD optimizer;
+        optimizer.add_parameters(mlp.parameters());
+        optimizer.add_parameters(grid.parameters());
 
 
         eignn::Shuffler shuffler;
