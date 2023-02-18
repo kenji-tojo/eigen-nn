@@ -4,6 +4,7 @@
 #include "eignn/sampler.hpp"
 #include "eignn/loss.hpp"
 #include "eignn/encoder.hpp"
+#include "eignn/optimizer.hpp"
 
 
 namespace {
@@ -75,6 +76,10 @@ int main() {
     eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
 
 
+    eignn::MSELoss loss;
+    eignn::Optimizer optimizer(mlp.parameters());
+
+
     const int batch_size = 32;
     const int batches = pixels/batch_size;
 
@@ -83,8 +88,6 @@ int main() {
 
     const float step_size = 1e-1f;
     const int epochs = 3;
-
-    eignn::MSELoss loss;
 
     eignn::Shuffler shuffler;
     MatrixXf coords, rgb;
@@ -113,6 +116,8 @@ int main() {
             grid.adjoint(mlp.x_adj);
             ff.adjoint(grid.x_adj);
             assert(ff.x_adj.rows() == x.rows() && ff.x_adj.cols() == x.cols());
+
+            optimizer.descent();
 
             cout << "epoch no." << epoch_id+1 << ": loss = " << loss_val << endl;
         }

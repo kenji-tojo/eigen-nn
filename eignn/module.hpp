@@ -20,6 +20,9 @@ public:
     Eigen::MatrixXf x_adj;
     virtual void forward(const Eigen::MatrixXf &x) = 0;
     virtual void adjoint(const Eigen::MatrixXf &y_adj) = 0;
+    virtual std::vector<std::shared_ptr<ad::MatrixXf>> parameters() {
+        return {};
+    }
     virtual ~Module() = default;
 };
 
@@ -65,42 +68,51 @@ public:
 template<bool bias_ = true>
 class Linear: public Module {
 public:
-    Eigen::MatrixXf mat;
-    Eigen::VectorXf bias;
+    std::shared_ptr<ad::MatrixXf> mat = std::make_shared<ad::MatrixXf>();
+    std::shared_ptr<ad::MatrixXf> bias = std::make_shared<ad::MatrixXf>();
 
     Eigen::MatrixXf d_mat;
 
     Linear(int in_dim, int out_dim) {
+        mat->resize(out_dim,in_dim);
+        if constexpr(bias_) {
+            bias->resize(out_dim,1);
+            bias->m.setZero();
+        }
+
         GaussSampler<float> gs{/*mean=*/0.f,/*stddev=*/.5f};
-
-        mat.setZero(out_dim,in_dim);
-        if constexpr(bias_)
-            bias.setZero(out_dim,1);
-
-        for (int col = 0; col < mat.cols(); ++col)
-            for (int row = 0; row < mat.rows(); ++row)
-                mat(row,col) = gs.sample();
+        mat->init([&gs](int index){ return gs.sample(); });
     }
 
     ~Linear() override = default;
 
     void forward(const Eigen::MatrixXf &x) override {
-        y = mat * x;
-        if constexpr(bias_)
-            y.colwise() += bias;
+        y = mat->m * x;
+
+        if constexpr(bias_) {
+            for (int ii = 0; ii < y.cols(); ++ii)
+                y.block(0,ii,y.rows(),1) += bias->m;
+        }
 
         d_mat = x.transpose();
     }
 
     void adjoint(const Eigen::MatrixXf &y_adj) override {
-        x_adj = mat.transpose() * y_adj;
+        x_adj = mat->m.transpose() * y_adj;
 
         if (freeze)
             return;
 
-        mat -= y_adj * d_mat;
-        if constexpr(bias_)
-            bias -= y_adj.rowwise().sum();
+        mat->grad = y_adj * d_mat;
+
+        if constexpr(bias_) {
+            for (int ii = 0; ii < y_adj.rows(); ++ii)
+                bias->grad(ii,0) = y_adj.row(ii).sum();
+        }
+    }
+
+    std::vector<std::shared_ptr<ad::MatrixXf>> parameters() override {
+        return { mat, bias };
     }
 };
 
@@ -139,6 +151,16 @@ public:
             m0->adjoint(m1->x_adj);
         }
         x_adj = modules[0]->x_adj;
+    }
+
+    std::vector<std::shared_ptr<ad::MatrixXf>> parameters() override {
+        std::vector<std::shared_ptr<ad::MatrixXf>> params;
+        for (auto &m: modules) {
+            auto mp = m->parameters();
+            for (const auto &p: mp)
+                params.push_back(p);
+        }
+        return params;
     }
 };
 

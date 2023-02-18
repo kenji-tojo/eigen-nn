@@ -9,6 +9,7 @@
 #include "eignn/module.hpp"
 #include "eignn/loss.hpp"
 #include "eignn/encoder.hpp"
+#include "eignn/optimizer.hpp"
 
 
 namespace nb = nanobind;
@@ -86,18 +87,22 @@ NB_MODULE(eignn, m) {
         const int out_dim = 3;
         eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
 
-        const int batches = 1 + pixels/batch_size;
-
-        MatrixXf x, y_tar, loss_adj;
-        x.resize(2, batch_size);
 
         eignn::MSELoss loss;
+        eignn::Optimizer optimizer(mlp.parameters());
+
 
         eignn::Shuffler shuffler;
         MatrixXf coords, rgb;
         std::vector<int> idx(pixels);
         for (int ii = 0; ii < idx.size(); ++ii)
             idx[ii] = ii;
+
+
+        const int batches = 1 + pixels/batch_size;
+        MatrixXf x, y_tar, loss_adj;
+        x.resize(2, batch_size);
+
 
         for (int epoch_id = 0; epoch_id < epochs; ++epoch_id) {
             shuffler.shuffle(idx);
@@ -117,17 +122,15 @@ NB_MODULE(eignn, m) {
                 float loss_val;
                 loss.eval(mlp.y,y_tar,loss_val,loss_adj);
                 assert(!std::isnan(loss_val));
-                if (end_col > pixels) {
-                    loss_adj.block(
-                            0, pixels-start_col,
-                            loss_adj.rows(), end_col-pixels
-                    ).setZero();
-                }
+                if (end_col > pixels)
+                    loss_adj.block(0, pixels-start_col,loss_adj.rows(), end_col-pixels).setZero();
 
                 mlp.adjoint(step_size*loss_adj);
                 grid.adjoint(mlp.x_adj);
                 ff.adjoint(grid.x_adj);
                 assert(ff.x_adj.rows() == x.rows() && ff.x_adj.cols() == x.cols());
+
+                optimizer.descent();
 
                 if (batch_id == 0 || batch_id % (batches/10) != 0)
                     continue;
