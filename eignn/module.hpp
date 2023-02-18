@@ -8,6 +8,7 @@
 #include <Eigen/Dense>
 
 #include "sampler.hpp"
+#include "ad.hpp"
 
 
 namespace eignn::module {
@@ -15,52 +16,48 @@ namespace eignn::module {
 class Module {
 public:
     bool freeze = false;
+    Eigen::MatrixXf y;
+    Eigen::MatrixXf x_adj;
     virtual void forward(const Eigen::MatrixXf &x) = 0;
-    virtual void reverse(const Eigen::MatrixXf &y_bar) = 0;
-    const Eigen::MatrixXf &y() const { return m_y; }
-    const Eigen::MatrixXf &x_bar() const { return m_x_bar; };
+    virtual void adjoint(const Eigen::MatrixXf &y_adj) = 0;
     virtual ~Module() = default;
-
-protected:
-    Eigen::MatrixXf m_y;
-    Eigen::MatrixXf m_x_bar;
 };
 
 
 class ReLU: public Module {
 public:
-    Eigen::MatrixXf partial_x;
+    Eigen::MatrixXf d_x;
 
     ~ReLU() override = default;
 
     void forward(const Eigen::MatrixXf &x) override {
-        m_y = x.cwiseMax(0);
-        partial_x.resize(x.rows(), x.cols());
+        y = x.cwiseMax(0);
+        d_x.resize(x.rows(), x.cols());
         for (int col = 0; col < x.cols(); ++col)
             for (int row = 0; row < x.rows(); ++row)
-                partial_x(row,col) = float(x(row,col)>0);
+                d_x(row,col) = float(x(row,col)>0);
     }
 
-    void reverse(const Eigen::MatrixXf &y_bar) override {
-        m_x_bar = y_bar.cwiseProduct(partial_x);
+    void adjoint(const Eigen::MatrixXf &y_adj) override {
+        x_adj = y_adj.cwiseProduct(d_x);
     }
 };
 
 
 class Sigmoid: public Module {
 public:
-    Eigen::MatrixXf partial_x;
+    Eigen::MatrixXf d_x;
 
     ~Sigmoid() override = default;
 
     void forward(const Eigen::MatrixXf &x) override {
-        m_y = x;
-        m_y = ((-1.f*m_y).array().exp()+1.f).inverse().matrix();
-        partial_x = (m_y.array() * ((-1.f*m_y).array()+1.f)).matrix();
+        y = x;
+        y = ((-1.f*y).array().exp()+1.f).inverse().matrix();
+        d_x = (y.array() * ((-1.f*y).array()+1.f)).matrix();
     }
 
-    void reverse(const Eigen::MatrixXf &y_bar) override {
-        m_x_bar = y_bar.cwiseProduct(partial_x);
+    void adjoint(const Eigen::MatrixXf &y_adj) override {
+        x_adj = y_adj.cwiseProduct(d_x);
     }
 };
 
@@ -71,14 +68,14 @@ public:
     Eigen::MatrixXf mat;
     Eigen::VectorXf bias;
 
-    Eigen::MatrixXf partial_mat;
+    Eigen::MatrixXf d_mat;
 
     Linear(int in_dim, int out_dim) {
         GaussSampler<float> gs{/*mean=*/0.f,/*stddev=*/.5f};
 
         mat.setZero(out_dim,in_dim);
         if constexpr(bias_)
-            bias.setZero(out_dim);
+            bias.setZero(out_dim,1);
 
         for (int col = 0; col < mat.cols(); ++col)
             for (int row = 0; row < mat.rows(); ++row)
@@ -88,22 +85,22 @@ public:
     ~Linear() override = default;
 
     void forward(const Eigen::MatrixXf &x) override {
-        m_y = mat * x;
+        y = mat * x;
         if constexpr(bias_)
-            m_y.colwise() += bias;
+            y.colwise() += bias;
 
-        partial_mat = x.transpose();
+        d_mat = x.transpose();
     }
 
-    void reverse(const Eigen::MatrixXf &y_bar) override {
-        m_x_bar = mat.transpose() * y_bar;
+    void adjoint(const Eigen::MatrixXf &y_adj) override {
+        x_adj = mat.transpose() * y_adj;
 
         if (freeze)
             return;
 
-        mat -= y_bar * partial_mat;
+        mat -= y_adj * d_mat;
         if constexpr(bias_)
-            bias -= y_bar.rowwise().sum();
+            bias -= y_adj.rowwise().sum();
     }
 };
 
@@ -114,7 +111,7 @@ public:
 
     ~Sequential() override = default;
 
-    size_t size() const { return modules.size(); }
+    [[nodiscard]] size_t size() const { return modules.size(); }
 
     void forward(const Eigen::MatrixXf &x) override {
         assert(!modules.empty());
@@ -125,23 +122,23 @@ public:
             auto &m1 = modules[ii+1];
             assert(m0);
             assert(m1);
-            m1->forward(m0->y());
+            m1->forward(m0->y);
         }
-        m_y = modules[size()-1]->y();
+        y = modules[size()-1]->y;
     }
 
-    void reverse(const Eigen::MatrixXf &y_bar) override {
+    void adjoint(const Eigen::MatrixXf &y_adj) override {
         assert(!modules.empty());
         assert(modules[size()-1]);
-        modules[size()-1]->reverse(y_bar);
+        modules[size()-1]->adjoint(y_adj);
         for (int ii = 0; ii < size()-1; ++ii) {
             auto &m0 = modules[modules.size()-ii-2];
             auto &m1 = modules[modules.size()-ii-1];
             assert(m0);
             assert(m1);
-            m0->reverse(m1->x_bar());
+            m0->adjoint(m1->x_adj);
         }
-        m_x_bar = modules[0]->x_bar();
+        x_adj = modules[0]->x_adj;
     }
 };
 

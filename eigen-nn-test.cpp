@@ -49,21 +49,25 @@ int main() {
     const int pixels = width * height;
 
 
-    eignn::module::FourierFeature ff;
-    ff.freq = {1,2,3};
-    const int freqs = ff.freq.size();
-
-
-    const int grid_res = 4;
+    const int min_res = 16;
+    const int levels = 2;
     const int feature_dim = 2;
     const int table_size_log2 = 2;
 
     ArrayXi grid_shape;
     grid_shape.resize(2);
-    grid_shape[0] = grid_shape[1] = grid_res;
-    eignn::module::FeatureGrid<2> grid{grid_shape, feature_dim, table_size_log2};
+    eignn::module::FeatureGrid<2> grid{
+            min_res, levels, feature_dim, table_size_log2
+    };
 
-    const int in_dim = (grid.dim()+2)*(1+2*freqs);
+
+    eignn::module::FourierFeature ff;
+    ff.freq = {1,2,3};
+    const int freqs = ff.freq.size();
+
+
+    const int coords_ndim = 2;
+    const int in_dim = grid.dim()*grid.levels()+coords_ndim*(1+2*freqs);
     const int out_dim = 3;
 
     const int hidden_dim = 4;
@@ -74,7 +78,7 @@ int main() {
     const int batch_size = 32;
     const int batches = pixels/batch_size;
 
-    MatrixXf x, y_tar, loss_bar;
+    MatrixXf x, y_tar, loss_adj;
     x.resize(2, batch_size);
 
     const float step_size = 1e-1f;
@@ -96,19 +100,19 @@ int main() {
             x = coords.block(0,batch_size*batch_id,2,batch_size);
             y_tar = rgb.block(0,batch_size*batch_id,3,batch_size);
 
-            grid.forward(x);
-            ff.forward(grid.y());
-            mlp.forward(ff.y());
-            assert(!std::isnan(mlp.y().sum()));
+            ff.forward(x);
+            grid.forward(ff.y);
+            mlp.forward(grid.y);
+            assert(!std::isnan(mlp.y.sum()));
 
             float loss_val;
-            loss.eval(mlp.y(),y_tar,loss_val,loss_bar);
+            loss.eval(mlp.y,y_tar,loss_val,loss_adj);
             assert(!std::isnan(loss_val));
 
-            mlp.reverse(step_size*loss_bar);
-            ff.reverse(mlp.x_bar());
-            grid.reverse(ff.x_bar());
-            assert(grid.x_bar().rows() == x.rows() && grid.x_bar().cols() == x.cols());
+            mlp.adjoint(step_size*loss_adj);
+            grid.adjoint(mlp.x_adj);
+            ff.adjoint(grid.x_adj);
+            assert(ff.x_adj.rows() == x.rows() && ff.x_adj.cols() == x.cols());
 
             cout << "epoch no." << epoch_id+1 << ": loss = " << loss_val << endl;
         }

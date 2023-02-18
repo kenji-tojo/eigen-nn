@@ -21,12 +21,13 @@ void create_pixel_dataset(
         nb::tensor<float, nb::shape<nb::any, nb::any, nb::any>> &img,
         Eigen::MatrixXf &coords,
         Eigen::MatrixXf &rgb,
-        const std::vector<int> &idx
+        const std::vector<int> &idx,
+        int padding
 ) {
     const auto width = img.shape(0);
     const auto height = img.shape(1);
-    coords.resize(2,width*height);
-    rgb.resize(3,width*height);
+    coords.resize(2,width*height+padding);
+    rgb.resize(3,width*height+padding);
     for (int iw = 0; iw < width; ++iw) {
         for (int ih = 0; ih < height; ++ih) {
             coords(0, idx[height*iw+ih]) = (float(iw)+.5f)/float(width);
@@ -50,7 +51,8 @@ NB_MODULE(eignn, m) {
             const float step_size,
             const int batch_size,
             const int epochs,
-            const int grid_res,
+            const int min_res,
+            const int levels,
             const int feature_dim,
             const int table_size_log2,
             nb::tensor<float, nb::shape<nb::any>> &_freq
@@ -67,28 +69,26 @@ NB_MODULE(eignn, m) {
                   << std::endl;
 
 
+        eignn::module::FeatureGrid<2> grid{
+            min_res, levels, feature_dim, table_size_log2
+        };
+
+
         eignn::module::FourierFeature ff;
         const int freqs = _freq.shape(0);
         ff.freq.resize(freqs);
         for (int ii = 0; ii < freqs; ++ii)
             ff.freq[ii] = _freq(ii);
 
-        ArrayXi grid_shape;
-        grid_shape.resize(2);
-        grid_shape[0] = grid_shape[1] = grid_res;
-        eignn::module::FeatureGrid<2> grid{grid_shape, feature_dim, table_size_log2};
 
-        const int in_dim = (grid.dim()+2)*(1+2*freqs);
+        const int coords_ndim = 2;
+        const int in_dim = grid.dim()*grid.levels()+coords_ndim*(1+2*freqs);
         const int out_dim = 3;
         eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
 
-#if defined(NDEBUG)
-        const int batches = pixels/batch_size;
-#else
-        const int batches = 10;
-#endif
+        const int batches = 1 + pixels/batch_size;
 
-        MatrixXf x, y_tar, loss_bar;
+        MatrixXf x, y_tar, loss_adj;
         x.resize(2, batch_size);
 
         eignn::MSELoss loss;
@@ -101,30 +101,36 @@ NB_MODULE(eignn, m) {
 
         for (int epoch_id = 0; epoch_id < epochs; ++epoch_id) {
             shuffler.shuffle(idx);
-            ::create_pixel_dataset(img, coords, rgb, idx);
+            ::create_pixel_dataset(img, coords, rgb, idx, batch_size);
 
             for (int batch_id = 0; batch_id < batches; ++batch_id) {
-                x = coords.block(0,batch_size*batch_id,2,batch_size);
-                y_tar = rgb.block(0,batch_size*batch_id,3,batch_size);
+                const int start_col = batch_size * batch_id;
+                const int end_col = start_col + batch_size;
+                x = coords.block(0,start_col,2,batch_size);
+                y_tar = rgb.block(0,start_col,3,batch_size);
 
-                grid.forward(x);
-                ff.forward(grid.y());
-                mlp.forward(ff.y());
-                assert(!std::isnan(mlp.y().sum()));
+                ff.forward(x);
+                grid.forward(ff.y);
+                mlp.forward(grid.y);
+                assert(!std::isnan(mlp.y.sum()));
 
                 float loss_val;
-                loss.eval(mlp.y(),y_tar,loss_val,loss_bar);
+                loss.eval(mlp.y,y_tar,loss_val,loss_adj);
                 assert(!std::isnan(loss_val));
+                if (end_col > pixels) {
+                    loss_adj.block(
+                            0, pixels-start_col,
+                            loss_adj.rows(), end_col-pixels
+                    ).setZero();
+                }
 
-                mlp.reverse(step_size*loss_bar);
-                ff.reverse(mlp.x_bar());
-                grid.reverse(ff.x_bar());
-                assert(grid.x_bar().rows() == x.rows() && grid.x_bar().cols() == x.cols());
+                mlp.adjoint(step_size*loss_adj);
+                grid.adjoint(mlp.x_adj);
+                ff.adjoint(grid.x_adj);
+                assert(ff.x_adj.rows() == x.rows() && ff.x_adj.cols() == x.cols());
 
-#if defined(NDEBUG)
                 if (batch_id == 0 || batch_id % (batches/10) != 0)
                     continue;
-#endif
 
                 std::cout << "epoch: " << epoch_id+1 << "/" << epochs
                           << " batch: " << batch_id+1 << "/" << batches
@@ -135,24 +141,20 @@ NB_MODULE(eignn, m) {
 
         for (int ii = 0; ii < idx.size(); ++ii)
             idx[ii] = ii;
-        ::create_pixel_dataset(img, coords, rgb, idx);
+        ::create_pixel_dataset(img, coords, rgb, idx, 0);
 
 
-        auto img_out = new float[pixels*channels];
         for (int iw = 0; iw < width; ++iw) {
             x = coords.block(0,height*iw,2,height);
 
-            grid.forward(x);
-            ff.forward(grid.y());
-            mlp.forward(ff.y());
+            ff.forward(x);
+            grid.forward(ff.y);
+            mlp.forward(grid.y);
 
             for (int ih = 0; ih < height; ++ih)
                 for (int ic = 0; ic < channels; ++ic)
-                    img_out[channels*height*iw+channels*ih+ic] = mlp.y()(ic,ih);
+                    img(iw,ih,ic) = mlp.y(ic,ih);
         }
-
-        size_t shape[3]{width,height,channels};
-        return nb::tensor<nb::numpy, float>{img_out,3,shape};
     });
 
 }
