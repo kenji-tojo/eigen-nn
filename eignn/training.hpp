@@ -38,8 +38,10 @@ void create_pixel_dataset(
 template<typename Tensor_, typename Encoder_>
 void fit_field(
         Tensor_ &img,
-        const int epochs,
-        const int batch_size,
+        int epoch_start,
+        int epoch_end,
+        int epochs,
+        int batch_size,
         Optimizer &optimizer,
         module::MLP &mlp,
         Encoder_ &enc
@@ -61,7 +63,10 @@ void fit_field(
 
     MatrixXf x, y_tar, loss_adj;
 
-    for (int epoch_id = 0; epoch_id < epochs; ++epoch_id) {
+    if (epoch_end < epoch_start) epoch_end = epoch_start;
+    if (epoch_end >= epochs) epoch_end = epochs;
+
+    for (int epoch_id = epoch_start; epoch_id < epoch_end; ++epoch_id) {
         shuffler.shuffle(idx_map);
         create_pixel_dataset(img, coords, rgb, idx_map);
 
@@ -94,6 +99,18 @@ void fit_field(
                       << "loss = " << loss_val << std::endl;
         }
     }
+}
+
+template<typename Tensor_, typename Encoder_>
+void fit_field(
+        Tensor_ &img,
+        const int epochs,
+        const int batch_size,
+        Optimizer &optimizer,
+        module::MLP &mlp,
+        Encoder_ &enc
+) {
+    fit_field<Tensor_, Encoder_>(img, 0, epochs, epochs, batch_size, optimizer, mlp, enc);
 }
 
 

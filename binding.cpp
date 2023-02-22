@@ -61,7 +61,7 @@ public:
 
     void fit(
             nb::tensor<float, nb::shape<nb::any, nb::any, nb::any>> &img,
-            const int epochs, const int batch_size, const float learning_rate
+            const int epoch_start, const int epoch_end, const int epochs, const int batch_size, const float learning_rate
     ) {
         if (!mlp || !enc) {
             std::cerr << "error: no network is set" << std::endl;
@@ -78,7 +78,7 @@ public:
                   << std::endl;
 
         optimizer->learning_rate = learning_rate;
-        fit_field(img, epochs, batch_size, *optimizer, *mlp, *enc);
+        fit_field(img, epoch_start, epoch_end, epochs, batch_size, *optimizer, *mlp, *enc);
     }
 
     void render(nb::tensor<float, nb::shape<nb::any, nb::any, nb::any>> &img) {

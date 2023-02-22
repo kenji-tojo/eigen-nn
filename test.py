@@ -18,6 +18,7 @@ if __name__ == '__main__':
     parser.add_argument('-e', '--epochs', type=int, default=30, help='number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('-l', '--learning_rate', type=float, default=1e-3, help='learning rate')
+    parser.add_argument('--interval', type=int, default=4, help='interval to save image')
 
     # size of MLP
     parser.add_argument('-w', '--width', type=int, default=64, help='hidden_width')
@@ -78,13 +79,17 @@ if __name__ == '__main__':
             hidden_dim, hidden_depth, out_dim,
             min_res, feature_dim, levels, table_size_log2
         )
+    
     else:
         print(f'unknown encoding type {args.enc}')
         assert False
-
-    neural_field.fit(img, epochs, batch_size, lr)
+    
     img_dest = img.copy()
-    neural_field.render(img_dest)
-
-    save_img(img_dest, 'result')
+    epoch_id = 0
+    interval = 4
+    while epoch_id < epochs:
+        neural_field.fit(img, epoch_id, epoch_id+interval, epochs, batch_size, lr)
+        neural_field.render(img_dest)
+        save_img(img_dest, 'result')
+        epoch_id += interval
     
