@@ -5,6 +5,10 @@ import os, shutil
 
 OUTPUT_DIR = './output'
 
+def save_img(img: np.ndarray, name: str) -> None:
+    img = Image.fromarray((img*255.).clip(0,255).astype(np.uint8))
+    img.save(os.path.join(OUTPUT_DIR, f'{name}.png'))
+
 if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
@@ -40,44 +44,47 @@ if __name__ == '__main__':
 
     import eignn
 
+    neural_field = eignn.NeuralField2D()
+
     epochs = args.epochs
     batch_size = args.batch_size
     lr = args.learning_rate
 
     hidden_dim = args.width
     hidden_depth = args.depth
+    out_dim = img.shape[2]
 
-    if args.enc == 'none':
+    if args.enc == 'none' or args.enc == '':
         print(f'encoding type: none')
-        eignn.fit_field_vanilla(
-            img, # will be updated in place
-            epochs, batch_size, lr,
-            hidden_dim, hidden_depth
-        )
+
+        neural_field.set_network(hidden_dim, hidden_depth, out_dim)
+
     elif args.enc == 'ff' or args.enc == 'fourier':
         print(f'encoding type: fourier feature')
+
         freqs = args.freqs
-        eignn.fit_field_ff(
-            img, # will be updated in place
-            epochs, batch_size, lr,
-            hidden_dim, hidden_depth,
-            freqs
-        )
+
+        neural_field.set_network_ff(hidden_dim, hidden_depth, out_dim, freqs)
+
     elif args.enc == 'hash':
         print(f'encoding type: hash')
+
         min_res = args.min_res
         feature_dim = args.feature_dim
         levels = args.levels
         table_size_log2 = args.table_size_log2
-        eignn.fit_field_hash(
-            img, # will be updated in place
-            epochs, batch_size, lr,
-            hidden_dim, hidden_depth,
+
+        neural_field.set_network_hash(
+            hidden_dim, hidden_depth, out_dim,
             min_res, feature_dim, levels, table_size_log2
         )
     else:
         print(f'unknown encoding type {args.enc}')
         assert False
 
-    img = Image.fromarray((img*255.).clip(0,255).astype(np.uint8))
-    img.save(os.path.join(OUTPUT_DIR,'result.png'))
+    neural_field.fit(img, epochs, batch_size, lr)
+    img_dest = img.copy()
+    neural_field.render(img_dest)
+
+    save_img(img_dest, 'result')
+    

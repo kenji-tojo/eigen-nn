@@ -16,15 +16,20 @@
 
 namespace eignn::module {
 
+class Encoder: public Module {
+public:
+    [[nodiscard]] virtual unsigned int out_dim() const = 0;
+};
+
 template<unsigned int ndim_ = 2>
-class FourierFeature: public Module {
+class FourierFeature: public Encoder {
 public:
     unsigned int freqs = 0;
     Eigen::MatrixXf d_x;
 
     ~FourierFeature() override = default;
 
-    [[nodiscard]] unsigned int out_dim() const { return ndim_*(1+2*freqs); }
+    [[nodiscard]] unsigned int out_dim() const override { return ndim_*(1+2*freqs); }
 
     void forward(const Eigen::MatrixXf &x) override {
         assert(ndim_ == x.rows());
@@ -79,7 +84,7 @@ public:
 
 
 template<unsigned int ndim_ = 2>
-class FeatureGrid: public Module {
+class FeatureGrid: public Encoder {
 public:
     std::vector<std::shared_ptr<ad::Matrixf>> feature;
     float b = 1.5f;
@@ -123,7 +128,7 @@ public:
         }
     }
 
-    [[nodiscard]] unsigned int out_dim() const { return dim * levels; }
+    [[nodiscard]] unsigned int out_dim() const override { return dim * levels; }
 
     void forward(const Eigen::MatrixXf &x) override {
         static_assert(ndim_ == 2);

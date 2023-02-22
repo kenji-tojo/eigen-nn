@@ -36,13 +36,12 @@ void create_pixel_dataset(
 
 
 template<typename Tensor_, typename Encoder_>
-std::unique_ptr<eignn::module::MLP> fit_field(
+void fit_field(
         Tensor_ &img,
         const int epochs,
         const int batch_size,
-        const float learning_rate,
-        const int hidden_dim,
-        const int hidden_depth,
+        Optimizer &optimizer,
+        module::MLP &mlp,
         Encoder_ &enc
 ) {
     using namespace Eigen;
@@ -52,17 +51,7 @@ std::unique_ptr<eignn::module::MLP> fit_field(
     const unsigned int height = img.shape(1);
     const unsigned int pixels = width*height;
 
-    const int in_dim = enc.out_dim();
-    const int out_dim = 3;
-    auto mlp = std::make_unique<module::MLP>(
-            in_dim, out_dim, hidden_dim, hidden_depth
-    );
-
     MSELoss loss;
-    Adam optimizer;
-    optimizer.learning_rate = learning_rate;
-    optimizer.add_parameters(mlp->parameters());
-    optimizer.add_parameters(enc.parameters());
 
     Shuffler shuffler;
     MatrixXf coords, rgb;
@@ -85,15 +74,15 @@ std::unique_ptr<eignn::module::MLP> fit_field(
             y_tar = rgb.block(0,start,3,end-start);
 
             enc.forward(x);
-            mlp->forward(enc.y);
-            assert(!std::isnan(mlp->y.sum()));
+            mlp.forward(enc.y);
+            assert(!std::isnan(mlp.y.sum()));
 
             float loss_val;
-            loss.eval(mlp->y, y_tar, loss_val, loss_adj);
+            loss.eval(mlp.y, y_tar, loss_val, loss_adj);
             assert(!std::isnan(loss_val));
 
-            mlp->adjoint(loss_adj);
-            enc.adjoint(mlp->x_adj);
+            mlp.adjoint(loss_adj);
+            enc.adjoint(mlp.x_adj);
             assert(enc.x_adj.rows()==x.rows() && enc.x_adj.cols()==x.cols());
 
             optimizer.descent();
@@ -105,8 +94,6 @@ std::unique_ptr<eignn::module::MLP> fit_field(
                       << "loss = " << loss_val << std::endl;
         }
     }
-
-    return mlp;
 }
 
 

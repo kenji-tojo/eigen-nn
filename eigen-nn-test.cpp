@@ -62,22 +62,32 @@ int main() {
         eignn::module::FourierFeature</*ndim_=*/2> ff;
         ff.freqs = 0;
 
-        auto mlp = eignn::fit_field(
-                img, epochs, batch_size, learning_rate,
-                hidden_dim, hidden_depth, ff
-        );
-        assert(mlp);
+        int in_dim = ff.out_dim();
+        int out_dim = 3;
 
+        {
+            eignn::module::MLP mlp{in_dim,out_dim,hidden_dim,hidden_depth};
+            auto adam = std::make_unique<eignn::Adam>();
+            adam->learning_rate = learning_rate;
+            adam->add_parameters(mlp.parameters());
+            adam->add_parameters(ff.parameters());
+            eignn::fit_field(img, epochs, batch_size, *adam,mlp, ff);
+        }
 
         std::cout << "testing fourier feature" << std::endl;
         ff.freqs = 3;
-        mlp = eignn::fit_field(
-                img, epochs, batch_size, learning_rate,
-                hidden_dim, hidden_depth, ff
-        );
-        assert(mlp);
+        in_dim = ff.out_dim();
 
-        eignn::render_field(img, *mlp, ff);
+        eignn::module::MLP mlp{in_dim,out_dim,hidden_dim,hidden_depth};
+        {
+            auto adam = std::make_unique<eignn::Adam>();
+            adam->learning_rate = learning_rate;
+            adam->add_parameters(mlp.parameters());
+            adam->add_parameters(ff.parameters());
+            eignn::fit_field(img, epochs, batch_size, *adam,mlp, ff);
+        }
+
+        eignn::render_field(img, mlp, ff);
         std::cout << "img shape: "
                   << img.shape(0) << "x"
                   << img.shape(1) << "x"
@@ -96,13 +106,17 @@ int main() {
                 min_res, feature_dim, levels, table_size_log2
         };
 
-        auto mlp = eignn::fit_field(
-                img, epochs, batch_size, learning_rate,
-                hidden_dim, hidden_depth, grid
-        );
-        assert(mlp);
+        int in_dim = grid.out_dim();
+        int out_dim = 3;
 
-        eignn::render_field(img, *mlp, grid);
+        eignn::module::MLP mlp{in_dim,out_dim,hidden_dim,hidden_depth};
+        auto adam = std::make_unique<eignn::Adam>();
+        adam->learning_rate = learning_rate;
+        adam->add_parameters(mlp.parameters());
+        adam->add_parameters(grid.parameters());
+        eignn::fit_field(img, epochs, batch_size, *adam,mlp, grid);
+
+        eignn::render_field(img, mlp, grid);
         std::cout << "img shape: "
                   << img.shape(0) << "x"
                   << img.shape(1) << "x"
