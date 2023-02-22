@@ -9,11 +9,13 @@ if __name__ == '__main__':
     import argparse
     parser = argparse.ArgumentParser()
 
+    # optimization conditions
     parser.add_argument('path', help='path to the input image file')
     parser.add_argument('-e', '--epochs', type=int, default=30, help='number of epochs')
     parser.add_argument('-b', '--batch_size', type=int, default=128, help='batch size')
     parser.add_argument('-l', '--learning_rate', type=float, default=1e-3, help='learning rate')
 
+    # size of MLP
     parser.add_argument('-w', '--width', type=int, default=64, help='hidden_width')
     parser.add_argument('-d', '--depth', type=int, default=2, help='hidden_depth')
 
@@ -23,7 +25,7 @@ if __name__ == '__main__':
     # Fourier feature encoding
     parser.add_argument('-f', '--freqs', type=int, default=10, help='number of fourier-feature frequencies')
 
-    # Hash encoding
+    # hash encoding
     parser.add_argument('--min_res', type=int, default=16, help='base_res')
     parser.add_argument('--levels', type=int, default=3, help='levels')
     parser.add_argument('--feature_dim', type=int, default=2, help='feature_dim')

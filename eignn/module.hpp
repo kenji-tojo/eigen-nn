@@ -9,6 +9,7 @@
 
 #include "sampler.hpp"
 #include "ad.hpp"
+#include "thread.hpp"
 
 
 namespace eignn::module {
@@ -34,9 +35,10 @@ public:
     void forward(const Eigen::MatrixXf &x) override {
         y = x.cwiseMax(0);
         d_x.resize(x.rows(), x.cols());
-        for (int col = 0; col < x.cols(); ++col)
+        parallel_for(x.cols(), [&](int idx, int tid){
             for (int row = 0; row < x.rows(); ++row)
-                d_x(row,col) = float(x(row,col)>0);
+                d_x(row,idx) = float(x(row,idx)>0);
+        });
     }
 
     void adjoint(const Eigen::MatrixXf &y_adj) override {
