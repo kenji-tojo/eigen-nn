@@ -5,7 +5,7 @@
 ## TL;DR
 This is an implementation of the [hash-based spatial encoding](https://nvlabs.github.io/instant-ngp/) for neural fields written in C++/Eigen.
 This repository also contains a minimalistic C++ code for neural network training using gradient back-propagation.
-I wrote this code to understand what's going on at a low level with a minimal dependency. I'd be happy if this repository is also useful for somebody interested in neural fields.
+I wrote this code to understand what's going on at a low level with a minimal dependency. I'd be happy if this repository works as a good reference for somebody interested in neural fields.
 
 Note: currently, only 2D neural fields are supported.
 
