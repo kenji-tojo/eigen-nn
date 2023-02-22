@@ -1,42 +1,33 @@
 #include <iostream>
+#include <array>
 
-#include "eignn/module.hpp"
-#include "eignn/sampler.hpp"
-#include "eignn/loss.hpp"
-#include "eignn/encoder.hpp"
-#include "eignn/optimizer.hpp"
+#include "eignn/training.hpp"
 
 
 namespace {
 
-void random_matrix(Eigen::MatrixXf &m, eignn::Sampler<float> &sampler) {
-    for (int ii = 0; ii < m.rows(); ++ii) {
-        for (int jj = 0; jj < m.cols(); ++jj) {
-            m(ii,jj) = sampler.sample();
-        }
+struct Image {
+public:
+    void resize(int width, int height, int channels) {
+        m_shape[0] = width;
+        m_shape[1] = height;
+        m_shape[2] = channels;
+        m_data.resize(width*height*channels);
     }
-}
 
-void create_pixel_dataset(
-        int width, int height,
-        Eigen::MatrixXf &coords,
-        Eigen::MatrixXf &rgb,
-        const std::vector<int> &idx
-) {
-    coords.resize(2, width*height);
-    rgb.resize(3, width*height);
+    [[nodiscard]] size_t ndim() const { return m_shape.size(); }
+    unsigned int &shape(size_t index) { return m_shape[index]; }
 
-    for (int iw = 0; iw < width; ++iw) {
-        for (int ih = 0; ih < height; ++ih) {
-            int pix_id = idx[height*iw+ih];
-            coords(0, pix_id) = (float(iw)+.5f)/float(width);
-            coords(1, pix_id) = (float(ih)+.5f)/float(height);
-            rgb(0, pix_id) = coords(0, pix_id);
-            rgb(1, pix_id) = coords(1, pix_id);
-            rgb(2, pix_id) = .5f;
-        }
+    float &operator()(size_t iw, size_t ih, size_t ic) {
+        assert(iw<m_shape[0] && ih<m_shape[1] && ic<m_shape[2]);
+        unsigned int index = m_shape[1]*m_shape[2]*iw + m_shape[2]*ih + ic;
+        return m_data[index];
     }
-}
+
+private:
+    std::array<unsigned int, 3> m_shape{0,0,1};
+    std::vector<float> m_data;
+};
 
 } // namespace
 
@@ -47,81 +38,74 @@ int main() {
 
     const int width = 16;
     const int height = 16;
-    const int pixels = width * height;
+
+    ::Image img;
+    img.resize(width, height, /*channels=*/3);
+    for (int iw = 0; iw < width; ++iw) {
+        for (int ih = 0; ih < height; ++ih) {
+            img(iw, ih, 0) = (float(iw)+.5f)/float(width);
+            img(iw, ih, 1) = (float(ih)+.5f)/float(height);
+            img(iw, ih, 2) = .5f;
+        }
+    }
 
 
-    const int min_res = 16;
-    const int levels = 2;
-    const int feature_dim = 2;
-    const int table_size_log2 = 2;
-
-    ArrayXi grid_shape;
-    grid_shape.resize(2);
-    eignn::module::FeatureGrid<2> grid{
-            min_res, levels, feature_dim, table_size_log2
-    };
-
-
-    eignn::module::FourierFeature ff;
-    ff.freq = {1,2,3};
-    const int freqs = ff.freq.size();
-
-
-    const int coords_ndim = 2;
-    const int in_dim = grid.dim()*grid.levels()+coords_ndim*(1+2*freqs);
-    const int out_dim = 3;
-
+    const int epochs = 3;
+    const int batch_size = 32;
+    const float learning_rate = 1e-3f;
     const int hidden_dim = 4;
     const int hidden_depth = 1;
-    eignn::module::MLP mlp{in_dim, out_dim, hidden_dim, hidden_depth};
+
+    {
+        std::cout << "testing vanilla mlp" << std::endl;
+
+        eignn::module::FourierFeature</*ndim_=*/2> ff;
+        ff.freqs = 0;
+
+        auto mlp = eignn::fit_field(
+                img, epochs, batch_size, learning_rate,
+                hidden_dim, hidden_depth, ff
+        );
+        assert(mlp);
 
 
-    eignn::MSELoss loss;
-    eignn::SGD optimizer;
-    optimizer.add_parameters(mlp.parameters());
-    optimizer.add_parameters(grid.parameters());
+        std::cout << "testing fourier feature" << std::endl;
+        ff.freqs = 3;
+        mlp = eignn::fit_field(
+                img, epochs, batch_size, learning_rate,
+                hidden_dim, hidden_depth, ff
+        );
+        assert(mlp);
 
+        eignn::render_field(img, *mlp, ff);
+        std::cout << "img shape: "
+                  << img.shape(0) << "x"
+                  << img.shape(1) << "x"
+                  << img.shape(2) << std::endl;
+    }
 
-    const int batch_size = 32;
-    const int batches = pixels/batch_size;
+    {
+        std::cout << "testing hash encoding" << std::endl;
 
-    MatrixXf x, y_tar, loss_adj;
-    x.resize(2, batch_size);
+        const int min_res = 16;
+        const int levels = 2;
+        const int feature_dim = 2;
+        const int table_size_log2 = 5;
 
-    const float step_size = 1e-1f;
-    const int epochs = 3;
+        eignn::module::FeatureGrid</*ndim_=*/2> grid{
+                min_res, feature_dim, levels, table_size_log2
+        };
 
-    eignn::Shuffler shuffler;
-    MatrixXf coords, rgb;
-    std::vector<int> idx(pixels);
-    for (int ii = 0; ii < idx.size(); ++ii)
-        idx[ii] = ii;
+        auto mlp = eignn::fit_field(
+                img, epochs, batch_size, learning_rate,
+                hidden_dim, hidden_depth, grid
+        );
+        assert(mlp);
 
-    for (int epoch_id = 0; epoch_id < epochs; ++epoch_id) {
-        shuffler.shuffle(idx);
-        ::create_pixel_dataset(width, height, coords, rgb, idx);
-
-        for (int batch_id = 0; batch_id < batches; ++batch_id) {
-            x = coords.block(0,batch_size*batch_id,2,batch_size);
-            y_tar = rgb.block(0,batch_size*batch_id,3,batch_size);
-
-            ff.forward(x);
-            grid.forward(ff.y);
-            mlp.forward(grid.y);
-            assert(!std::isnan(mlp.y.sum()));
-
-            float loss_val;
-            loss.eval(mlp.y,y_tar,loss_val,loss_adj);
-            assert(!std::isnan(loss_val));
-
-            mlp.adjoint(step_size*loss_adj);
-            grid.adjoint(mlp.x_adj);
-            ff.adjoint(grid.x_adj);
-            assert(ff.x_adj.rows() == x.rows() && ff.x_adj.cols() == x.cols());
-
-            optimizer.descent();
-
-            cout << "epoch no." << epoch_id+1 << ": loss = " << loss_val << endl;
-        }
+        eignn::render_field(img, *mlp, grid);
+        std::cout << "img shape: "
+                  << img.shape(0) << "x"
+                  << img.shape(1) << "x"
+                  << img.shape(2) << std::endl;
     }
 }

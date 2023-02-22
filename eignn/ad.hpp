@@ -7,7 +7,7 @@
 
 namespace eignn::ad {
 
-class MatrixXf {
+class Matrixf {
 public:
     Eigen::MatrixXf m;
     Eigen::MatrixXf grad;
@@ -28,9 +28,9 @@ public:
         grad.setZero();
     }
 
-    void descent() {
-        if (m.size() > 0)
-            m -= grad;
+    void descent(float step_size) {
+        if (m.size() == 0) return;
+        m -= step_size * grad;
     }
 };
 

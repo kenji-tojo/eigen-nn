@@ -20,9 +20,7 @@ public:
     Eigen::MatrixXf x_adj;
     virtual void forward(const Eigen::MatrixXf &x) = 0;
     virtual void adjoint(const Eigen::MatrixXf &y_adj) = 0;
-    virtual std::vector<std::shared_ptr<ad::MatrixXf>> parameters() {
-        return {};
-    }
+    virtual std::vector<std::shared_ptr<ad::Matrixf>> parameters() { return {}; }
     virtual ~Module() = default;
 };
 
@@ -68,13 +66,14 @@ public:
 template<bool bias_ = true>
 class Linear: public Module {
 public:
-    std::shared_ptr<ad::MatrixXf> mat = std::make_shared<ad::MatrixXf>();
-    std::shared_ptr<ad::MatrixXf> bias = std::make_shared<ad::MatrixXf>();
+    std::shared_ptr<ad::Matrixf> mat = std::make_shared<ad::Matrixf>();
+    std::shared_ptr<ad::Matrixf> bias = std::make_shared<ad::Matrixf>();
 
     Eigen::MatrixXf d_mat;
 
     Linear(int in_dim, int out_dim) {
         mat->resize(out_dim,in_dim);
+
         if constexpr(bias_) {
             bias->resize(out_dim,1);
             bias->set_zero();
@@ -105,13 +104,11 @@ public:
 
         mat->grad = y_adj * d_mat;
 
-        if constexpr(bias_) {
-            for (int ii = 0; ii < y_adj.rows(); ++ii)
-                bias->grad(ii,0) = y_adj.row(ii).sum();
-        }
+        if constexpr(bias_)
+            bias->grad = y_adj.rowwise().sum();
     }
 
-    std::vector<std::shared_ptr<ad::MatrixXf>> parameters() override {
+    std::vector<std::shared_ptr<ad::Matrixf>> parameters() override {
         return { mat, bias };
     }
 };
@@ -126,9 +123,11 @@ public:
     [[nodiscard]] size_t size() const { return modules.size(); }
 
     void forward(const Eigen::MatrixXf &x) override {
-        assert(!modules.empty());
+        if (modules.empty()) { y = x; return; }
+
         assert(modules[0]);
         modules[0]->forward(x);
+
         for (int ii = 0; ii < size()-1; ++ii) {
             auto &m0 = modules[ii];
             auto &m1 = modules[ii+1];
@@ -136,13 +135,16 @@ public:
             assert(m1);
             m1->forward(m0->y);
         }
+
         y = modules[size()-1]->y;
     }
 
     void adjoint(const Eigen::MatrixXf &y_adj) override {
-        assert(!modules.empty());
+        if (modules.empty()) { x_adj = y_adj; return; }
+
         assert(modules[size()-1]);
         modules[size()-1]->adjoint(y_adj);
+
         for (int ii = 0; ii < size()-1; ++ii) {
             auto &m0 = modules[modules.size()-ii-2];
             auto &m1 = modules[modules.size()-ii-1];
@@ -150,11 +152,12 @@ public:
             assert(m1);
             m0->adjoint(m1->x_adj);
         }
+
         x_adj = modules[0]->x_adj;
     }
 
-    std::vector<std::shared_ptr<ad::MatrixXf>> parameters() override {
-        std::vector<std::shared_ptr<ad::MatrixXf>> params;
+    std::vector<std::shared_ptr<ad::Matrixf>> parameters() override {
+        std::vector<std::shared_ptr<ad::Matrixf>> params;
         for (auto &m: modules) {
             auto mp = m->parameters();
             for (const auto &p: mp)
@@ -169,8 +172,10 @@ class MLP: public Sequential {
 public:
     MLP(int in_dim, int out_dim, int hidden_dim, int hidden_depth) {
         add_dense(in_dim, hidden_dim, /*relu=*/true);
+
         for (int dd = 0; dd < hidden_depth; ++dd)
             add_dense(hidden_dim, hidden_dim, /*relu=*/true);
+
         add_dense(hidden_dim, out_dim, /*relu=*/false);
         modules.push_back(std::make_unique<Sigmoid>());
     }
@@ -178,6 +183,7 @@ public:
 private:
     void add_dense(int in_dim, int out_dim, bool relu) {
         modules.push_back(std::make_unique<Linear<true>>(in_dim, out_dim));
+
         if (relu)
             modules.push_back(std::make_unique<ReLU>());
     }
