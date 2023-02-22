@@ -1,1 +1,3 @@
-# A Trainable MLP Written in C++/Eigen
+# Hash-based Neural Fields Written in C++/Eigen
+
+![](fig/loss.png)
