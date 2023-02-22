@@ -123,7 +123,8 @@ public:
             ft = std::make_shared<ad::Matrixf>();
             ft->resize(dim, table_size[ii]);
 
-            GaussSampler<float> gs{0.f,.5f};
+            float stddev = 1.f / float(dim*levels);
+            GaussSampler<float> gs{/*mean=*/0.f,stddev};
             ft->init([&gs](int index){ return gs.sample(); });
         }
     }

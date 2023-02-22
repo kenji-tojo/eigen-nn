@@ -81,7 +81,8 @@ public:
             bias->set_zero();
         }
 
-        GaussSampler<float> gs{/*mean=*/0.f,/*stddev=*/.5f};
+        float stddev = 1.f / float(out_dim);
+        GaussSampler<float> gs{/*mean=*/0.f,stddev};
         mat->init([&gs](int index){ return gs.sample(); });
     }
 
