@@ -1,6 +1,7 @@
 import numpy as np
 from PIL import Image
 import os, shutil
+import matplotlib.pyplot as plt
 
 
 def save_img(img: np.ndarray, dir: str, name: str) -> None:
@@ -101,9 +102,17 @@ if __name__ == '__main__':
         TMP_DIR = os.path.join(OUTPUT_DIR, 'tmp')
         os.makedirs(TMP_DIR, exist_ok=True)
     
+    mse_record = []
+    epoch_record = []
+    
     while epoch_id < epochs:
         neural_field.fit(img, epoch_id, epoch_id+interval, epochs, batch_size, lr)
         neural_field.render(img_dest)
+
+        mse = np.square(img-img_dest).mean()
+        print(f'MSE = {mse}')
+        mse_record.append(mse)
+        epoch_record.append(epoch_id+interval)
 
         if create_video:
             save_img(img_dest, TMP_DIR, f'{frame_id:03d}')
@@ -113,6 +122,20 @@ if __name__ == '__main__':
 
         epoch_id += interval
         frame_id += 1
+    
+    
+    plt.rcParams['font.family'] = 'Times New Roman'
+    plt.rcParams.update({'font.size': 9})
+
+    fig, ax = plt.subplots()
+    ax.plot(epoch_record, mse_record)
+    ax.set_xlabel('Number of epochs')
+    ax.set_ylabel('Loss (MSE)')
+    ratio = .35
+    x_left, x_right = ax.get_xlim()
+    y_low, y_high = ax.get_ylim()
+    ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio)
+    fig.savefig(os.path.join(OUTPUT_DIR, 'loss.pdf'))
 
     
     if create_video:
