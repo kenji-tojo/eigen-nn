@@ -214,7 +214,8 @@ private:
         // gradient could be back-propagated...
         x_adj = MatrixXf::Zero(ndim_, y_adj.cols());
 
-        if (levels == 0) return;
+        if (freeze || levels == 0)
+            return;
 
         for (auto &ft: feature)
             ft->grad.setZero();

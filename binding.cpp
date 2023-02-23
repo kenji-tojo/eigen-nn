@@ -64,7 +64,7 @@ public:
             const int epoch_start, const int epoch_end, const int epochs, const int batch_size, const float learning_rate
     ) {
         if (!mlp || !enc) {
-            std::cerr << "error: no network is set" << std::endl;
+            std::cerr << "error: network is not set" << std::endl;
             return;
         }
 
@@ -83,7 +83,7 @@ public:
 
     void render(nb::tensor<float, nb::shape<nb::any, nb::any, nb::any>> &img) {
         if (!mlp || !enc) {
-            std::cerr << "error: no network is set" << std::endl;
+            std::cerr << "error: network is not set" << std::endl;
             return;
         }
 
