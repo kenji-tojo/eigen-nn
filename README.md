@@ -3,7 +3,7 @@
 ![](fig/loss.png)
 
 ## TL;DR
-This is an implementation of the [hash-based positional encoding](https://nvlabs.github.io/instant-ngp/) for neural fields written in C++/Eigen.
+This is an implementation of the [hash-based positional encoding](https://nvlabs.github.io/instant-ngp/) for [neural fields](https://neuralfields.cs.brown.edu/) written in C++/Eigen.
 This repository also contains a minimalistic C++ code for neural network training using gradient back-propagation.
 I wrote this code to understand what's going on at a low level with a minimal dependency. I'd be happy if this repository works as a good reference for somebody interested in neural fields and neural network training.
 
